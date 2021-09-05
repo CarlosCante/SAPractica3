@@ -1,0 +1,8 @@
+#!/bin/sh
+ssh enriquelopez16877@23.236.49.116 <<EOF
+ cd ~/SAPractica3
+ git pull
+ npm install
+ pm2 restart all
+ exit
+EOF
