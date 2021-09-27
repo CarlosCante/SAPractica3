@@ -1,3 +1,3 @@
 # SAPractica3
 
-6
+1
