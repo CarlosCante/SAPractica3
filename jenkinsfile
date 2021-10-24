@@ -1,0 +1,48 @@
+pipeline {
+    agent { label "minion-farm"}
+    stages {
+        stage('Instalacion de chef') {
+            steps {
+                script {
+                    def chef = fileExists '/usr/bin/chef-client'
+                    if (chef) {
+                        echo 'Chef ya esta instalado'
+                    }else{
+                        sh 'wget https://packages.chef.io/files/stable/chefdk/3.9.0/ubuntu/16.04/chefdk_3.9.0-1_amd64.deb'
+                        sh 'sudo dpkg -i chefdk_3.9.0-1_amd64.deb'
+                    }
+                }
+            }
+        }
+        stage('Descargar Cookbook') {
+            steps {
+                git credentialsId: 'github-creds', url: 'git@github.com/CarlosCante/SAPractica3'
+            }
+        }
+        stage('Intslacion de rubi y kitchen') {
+            steps {
+                sh 'sudo apt-get install -y rubygems ruby-dev'
+                sh 'chef gem install kitchen-docker'
+            }
+        }
+        stage('Prueba de kitchen') {
+            steps {
+               sh 'sudo kitchen test' 
+            }
+        }
+     
+        stage('Levandar nodos de chef') {
+            steps {
+                withCredentials([zip(credentialsId: 'chef-server-creds', variable: 'CHEFREPO')]) {
+                    sh 'mkdir -p $CHEFREPO/chef-repo/cookbooks/apache'
+                    sh 'sudo rm -rf $WORKSPACE/Berksfile.lock'
+                    sh 'mv $WORKSPACE/* $CHEFREPO/chef-repo/cookbooks/apache'
+                    sh "knife cookbook upload apache --force -o $CHEFREPO/chef-repo/cookbooks -c $CHEFREPO/chef-repo/.chef/knife.rb"
+                    withCredentials([sshUserPrivateKey(credentialsId: 'agent-creds', keyFileVariable: 'AGENT_SSHKEY', passphraseVariable: '', usernameVariable: '')]) {
+                        sh "knife ssh 'role:webserver' -x ubuntu -i $AGENT_SSHKEY 'sudo chef-client' -c $CHEFREPO/chef-repo/.chef/knife.rb"      
+                    }
+                }
+            }
+        }
+    }
+}
